@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FM Broadcast Mic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Base Styles and Font */
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #0d1117; /* Very Dark Background */
+            padding: 16px;
+        }
+
+        /* App Container Styling */
+        #app {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 0 3px #10b981; /* Strong shadow and teal ring */
+        }
+
+        /* Custom Toggle Switch Styles */
+        .toggle-switch {
+            width: 72px;
+            height: 36px;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #10b981; /* Green when checked */
+        }
+        .toggle-checkbox:checked + .toggle-label:after {
+            transform: translateX(36px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        .toggle-label {
+            background-color: #ff5252; /* Bright Red when unchecked */
+            transition: background-color 0.3s;
+        }
+        .toggle-label:after {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 32px;
+            height: 32px;
+            background-color: white;
+            border-radius: 9999px;
+            transition: transform 0.3s;
+        }
+
+        /* Live Indicator Animation (Pulsing Effect) */
+        .live-indicator-active {
+            animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+            }
+        }
+        
+        /* --- Rotary Knob Styling --- */
+        .knob-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .knob {
+            width: 80px;
+            height: 80px;
+            background-color: #2c3e50; /* Dark metallic base */
+            border-radius: 50%;
+            border: 3px solid #1f2937;
+            box-shadow: 
+                0 0 10px rgba(0, 0, 0, 0.8) inset, 
+                0 4px 6px rgba(0, 0, 0, 0.5);
+            cursor: grab;
+            position: relative;
+            transition: background-color 0.1s;
+        }
+        .knob:active {
+            cursor: grabbing;
+        }
+        
+        /* Knob Indicator Dot (Teal line) */
+        .knob-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px; /* Width of the pointer */
+            height: 40px; /* Length from center to edge */
+            transform-origin: 0 0;
+            transform: translate(-50%, -100%) rotate(0deg);
+        }
+
+        .knob-indicator:after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 4px;
+            height: 16px; /* Length of the visible marker */
+            background: #10b981; /* Teal indicator color */
+            border-radius: 2px;
+            transform: translateX(-50%);
+            box-shadow: 0 0 5px #10b981;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app" class="bg-gray-800 p-8 md:p-12 rounded-3xl shadow-xl max-w-sm w-full text-center">
+        <h1 class="text-4xl font-black text-white mb-2 tracking-tight">FM Mic Relay</h1>
+        <p class="text-teal-400 font-light mb-8">Professional Audio Stabilization</p>
+
+        <!-- Status & Toggle Block -->
+        <div class="flex items-center justify-between mb-10 p-5 rounded-2xl bg-gray-900 border border-gray-700 shadow-lg">
+            
+            <div class="flex flex-col items-start">
+                <span id="status-text" class="text-xl text-white font-bold mb-1">Ready to Broadcast</span>
+                <span id="live-dot" class="inline-block w-3 h-3 rounded-full bg-red-500 transition duration-300"></span>
+            </div>
+            
+
+            <!-- Toggle Switch -->
+            <div class="relative inline-block w-14 mr-2 align-middle select-none transition duration-200 ease-in">
+                <input type="checkbox" name="toggle" id="audio-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer hidden"/>
+                <label for="audio-toggle" class="toggle-label block overflow-hidden h-9 rounded-full cursor-pointer transition duration-300 ease-in-out toggle-switch shadow-md"></label>
+            </div>
+        </div>
+
+        <p id="status-message" class="mb-8 text-sm text-gray-400 bg-gray-700/50 p-3 rounded-xl border border-gray-700 transition duration-300">
+            Voice stability is optimized. Click and drag the knobs to fine-tune your signal.
+        </p>
+
+        <!-- Noise Control Section -->
+        <div class="flex justify-between space-x-4">
+            <!-- Gain Control Card (Knob) -->
+            <div class="p-4 rounded-xl bg-gray-700/50 border border-gray-700 shadow-md flex-1 knob-container">
+                <label class="block text-sm font-semibold text-white mb-3">Volume / Gain</label>
+                
+                <!-- Gain Knob Element -->
+                <div id="gain-knob" class="knob" data-min="0" data-max="100" data-value="50" data-audio-type="gain">
+                    <div id="gain-indicator" class="knob-indicator"></div>
+                </div>
+
+                <div class="mt-3">
+                    <span id="gain-value" class="text-xl text-teal-300 font-extrabold">50</span>%
+                </div>
+            </div>
+
+            <!-- High-Pass Filter Card (Knob) -->
+            <div class="p-4 rounded-xl bg-gray-700/50 border border-gray-700 shadow-md flex-1 knob-container">
+                <label class="block text-sm font-semibold text-white mb-3">HPF Cutoff</label>
+                
+                <!-- HPF Knob Element -->
+                <div id="hpf-knob" class="knob" data-min="20" data-max="500" data-value="100" data-audio-type="hpf">
+                    <div id="hpf-indicator" class="knob-indicator"></div>
+                </div>
+
+                <div class="mt-3">
+                    <span id="hpf-value" class="text-xl text-teal-300 font-extrabold">100</span> Hz
+                </div>
+            </div>
+        </div>
+        <!-- End Noise Control Section -->
+
+        <div class="mt-8 text-left p-4 bg-gray-900 rounded-xl border border-gray-700">
+            <h2 class="text-lg font-bold text-teal-400 mb-2">Technical Info:</h2>
+            <ul class="list-disc list-inside text-sm text-gray-400 space-y-1 pl-4">
+                <li>**Stability:** Echo cancellation is disabled for continuous voice flow.</li>
+                <li>**LPF (High Hiss):** Fixed filter cuts high static noise at 8kHz.</li>
+                <li>**Route:** Mic input is routed directly to the audio jack output.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // Core audio nodes and state variables
+            let ctx, source, gainNode, lpf, hpf, stream, active = false;
+
+            // Map element IDs for compactness
+            const toggle = document.getElementById('audio-toggle');
+            const statusMsg = document.getElementById('status-message');
+            const statusTxt = document.getElementById('status-text');
+            const dot = document.getElementById('live-dot');
+            
+            const gainKnob = document.getElementById('gain-knob');
+            const gainVal = document.getElementById('gain-value');
+            const gainIndicator = document.getElementById('gain-indicator');
+
+            const hpfKnob = document.getElementById('hpf-knob');
+            const hpfVal = document.getElementById('hpf-value');
+            const hpfIndicator = document.getElementById('hpf-indicator');
+
+            // Initial knob rotation offset (knobs start at -135 degrees)
+            const MIN_ANGLE = -135;
+            const MAX_ANGLE = 135;
+            const TOTAL_RANGE = MAX_ANGLE - MIN_ANGLE;
+
+            /**
+             * Converts a knob's value (min to max) to a rotation angle (-135deg to 135deg).
+             */
+            function valueToAngle(value, min, max) {
+                const range = max - min;
+                const ratio = (value - min) / range;
+                return MIN_ANGLE + (ratio * TOTAL_RANGE);
+            }
+
+            /**
+             * Converts 0-100 slider value to 0.0-2.0 gain value for the AudioContext.
+             */
+            const G = v => parseFloat(v) / 50; 
+
+            /**
+             * Applies initial rotation based on the data-value attribute.
+             */
+            function initializeKnob(knob, indicator) {
+                const val = parseFloat(knob.dataset.value);
+                const min = parseFloat(knob.dataset.min);
+                const max = parseFloat(knob.dataset.max);
+                const angle = valueToAngle(val, min, max);
+                indicator.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`;
+            }
+
+            // Initialize both knobs on load
+            initializeKnob(gainKnob, gainIndicator);
+            initializeKnob(hpfKnob, hpfIndicator);
+
+
+            /**
+             * Starts the audio stream and sets up the Web Audio chain.
+             */
+            async function start() {
+                if (ctx && ctx.state === 'suspended') {
+                    ctx.resume();
+                    return;
+                }
+                
+                try {
+                    // Request microphone, explicitly disabling features that cause voice cutting
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: { 
+                            echoCancellation: false, 
+                            noiseSuppression: false 
+                        } 
+                    });
+                    
+                    ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    source = ctx.createMediaStreamSource(stream);
+                    
+                    // 1. Gain Node (Volume)
+                    gainNode = ctx.createGain();
+                    gainNode.gain.setValueAtTime(G(gainKnob.dataset.value), ctx.currentTime);
+
+                    // 2. High-Pass Filter (Low rumble/hum removal)
+                    hpf = ctx.createBiquadFilter();
+                    hpf.type = 'highpass';
+                    hpf.frequency.setValueAtTime(parseFloat(hpfKnob.dataset.value), ctx.currentTime);
+
+                    // 3. Low-Pass Filter (High hiss/static removal)
+                    lpf = ctx.createBiquadFilter();
+                    lpf.type = 'lowpass';
+                    lpf.frequency.setValueAtTime(8000, ctx.currentTime); // Fixed 8 kHz cutoff
+
+                    // Connect the chain: Source -> Gain -> HPF -> LPF -> Destination
+                    source.connect(gainNode).connect(hpf).connect(lpf).connect(ctx.destination);
+
+                    active = true;
+                    statusTxt.textContent = 'LIVE BROADCAST';
+                    dot.className = 'inline-block w-3 h-3 rounded-full bg-green-500 transition duration-300 live-indicator-active';
+                    statusMsg.textContent = '🎙️ LIVE! Voice stabilization active. Fine-tune clarity with knobs.';
+                    statusMsg.classList.replace('text-gray-400', 'text-green-300');
+                } catch (err) {
+                    console.error('Mic Error:', err);
+                    toggle.checked = false;
+                    statusTxt.textContent = 'Error';
+                    dot.className = 'inline-block w-3 h-3 rounded-full bg-red-500 transition duration-300';
+                    statusMsg.textContent = '🛑 ERROR: Could not access microphone. Check permissions.';
+                    statusMsg.classList.replace('text-gray-400', 'text-red-500');
+                }
+            }
+
+            /**
+             * Stops the audio stream and cleans up resources.
+             */
+            function stop() {
+                try {
+                    // Disconnect all nodes and suspend context
+                    [source, gainNode, hpf, lpf].forEach(n => n && n.disconnect());
+                    if (ctx) ctx.suspend();
+                    // Stop the microphone stream
+                    if (stream) stream.getTracks().forEach(t => t.stop());
+                } catch (e) {
+                    console.error("Stop Error:", e);
+                }
+
+                active = false;
+                statusTxt.textContent = 'Ready to Broadcast';
+                dot.className = 'inline-block w-3 h-3 rounded-full bg-red-500 transition duration-300';
+                statusMsg.textContent = 'Relay Stopped. Flip the switch to start the broadcast.';
+                statusMsg.classList.remove('text-green-300', 'text-red-500');
+                statusMsg.classList.add('text-gray-400');
+            }
+
+            // --- Rotary Knob Logic ---
+            let isDragging = false;
+            let startY = 0;
+            let startValue = 0;
+            let currentKnob, currentIndicator, currentValueDisplay, currentAudioNode;
+
+            function updateKnob(knob, indicator, valDisplay, newVal) {
+                const min = parseFloat(knob.dataset.min);
+                const max = parseFloat(knob.dataset.max);
+                
+                // Clamp the new value
+                const clampedVal = Math.max(min, Math.min(max, newVal));
+                
+                // Update HTML and dataset
+                knob.dataset.value = clampedVal;
+                valDisplay.textContent = Math.round(clampedVal);
+
+                // Update rotation
+                const angle = valueToAngle(clampedVal, min, max);
+                indicator.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`;
+
+                // Update AudioContext node if active
+                if (active && ctx && currentAudioNode) {
+                    if (knob.dataset.audioType === 'gain') {
+                        currentAudioNode.gain.setValueAtTime(G(clampedVal), ctx.currentTime);
+                    } else if (knob.dataset.audioType === 'hpf') {
+                        currentAudioNode.frequency.setValueAtTime(clampedVal, ctx.currentTime);
+                    }
+                }
+            }
+
+            function startDrag(e) {
+                if (!e.target.closest('.knob')) return;
+                
+                isDragging = true;
+                e.preventDefault();
+                
+                currentKnob = e.target.closest('.knob');
+                
+                if (currentKnob.id === 'gain-knob') {
+                    currentIndicator = gainIndicator;
+                    currentValueDisplay = gainVal;
+                    currentAudioNode = gainNode;
+                } else if (currentKnob.id === 'hpf-knob') {
+                    currentIndicator = hpfIndicator;
+                    currentValueDisplay = hpfVal;
+                    currentAudioNode = hpf;
+                }
+
+                startY = e.clientY || e.touches[0].clientY;
+                startValue = parseFloat(currentKnob.dataset.value);
+
+                document.addEventListener('mousemove', doDrag);
+                document.addEventListener('mouseup', stopDrag);
+                document.addEventListener('touchmove', doDrag);
+                document.addEventListener('touchend', stopDrag);
+                currentKnob.classList.add('active-knob');
+            }
+
+            function doDrag(e) {
+                if (!isDragging) return;
+
+                const currentY = e.clientY || e.touches[0].clientY;
+                const deltaY = startY - currentY; // Moving up increases value
+
+                // Sensitivity factor: maps mouse movement (pixels) to value change
+                const sensitivity = 0.5; 
+                const valueChange = deltaY * sensitivity;
+                
+                const newVal = startValue + valueChange;
+                
+                updateKnob(currentKnob, currentIndicator, currentValueDisplay, newVal);
+            }
+
+            function stopDrag() {
+                isDragging = false;
+                document.removeEventListener('mousemove', doDrag);
+                document.removeEventListener('mouseup', stopDrag);
+                document.removeEventListener('touchmove', doDrag);
+                document.removeEventListener('touchend', stopDrag);
+                if (currentKnob) {
+                    currentKnob.classList.remove('active-knob');
+                }
+            }
+
+
+            // --- Event Listeners ---
+            
+            // Rotary Knob Drag setup
+            [gainKnob, hpfKnob].forEach(knob => {
+                knob.addEventListener('mousedown', startDrag);
+                knob.addEventListener('touchstart', startDrag, { passive: false });
+            });
+
+
+            // Toggle Switch functionality
+            toggle.addEventListener('change', () => toggle.checked ? start() : stop());
+            
+            // Cleanup on page close
+            window.addEventListener('beforeunload', stop);
+        })();
+    </script>
+</body>
+</html>
