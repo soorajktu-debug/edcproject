@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mic Signal Processor (HPF & Gain)</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+        :root {
+            --slider-height: 4px; /* Reduced thickness */
+            --thumb-size: 16px;   /* Reduced thumb size */
+            --fill-color: #5d98ff; /* Bright Blue for Active Fill and Thumb */
+            --active-color: #4CAF50; /* Green for Mic Toggle */
+            --knob-bg: #1a1a2e; /* Deep purple/dark blue */
+            --track-color: #3b3b52; /* Darker, visible track */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--knob-bg); 
+        }
+
+        /* --- SLIDER STYLING --- */
+
+        .slider-control-group {
+            position: relative;
+            padding: 0 8px; /* Adjusted padding for smaller thumb */
+        }
+
+        /* Base Range Input Styling */
+        .custom-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: var(--slider-height);
+            background: var(--track-color); 
+            border-radius: 9999px; 
+            cursor: pointer;
+            z-index: 10;
+            position: relative;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+            /* Initial track background fill (updated via JS) - uses bright fill color */
+            background-image: linear-gradient(to right, var(--fill-color) 0%, transparent 0%);
+            background-repeat: no-repeat;
+        }
+
+        /* --- THUMB STYLING (Webkit - Chrome, Safari) --- */
+        .custom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: var(--thumb-size);
+            height: var(--thumb-size);
+            /* Set the thumb to the bright fill color */
+            background: var(--fill-color); 
+            border: 2px solid var(--fill-color); /* Bright border color */
+            border-radius: 50%;
+            cursor: grab;
+            margin-top: calc((var(--thumb-size) / 2) - (var(--slider-height) / 2) * -1); /* Center the thumb */
+            transition: all 0.2s ease-out;
+            /* Added subtle white inner glow for definition */
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5), inset 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        /* --- THUMB STYLING (Moz - Firefox) --- */
+        .custom-slider::-moz-range-thumb {
+            width: var(--thumb-size);
+            height: var(--thumb-size);
+            /* Set the thumb to the bright fill color */
+            background: var(--fill-color);
+            border: 2px solid var(--fill-color); /* Bright border color */
+            border-radius: 50%;
+            cursor: grab;
+            transition: all 0.2s ease-out;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5), inset 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        /* --- MARKER DOTS/POINTS --- */
+        .slider-points {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            transform: translateY(-50%);
+            /* Adjusted height for thinner slider */
+            height: calc(var(--slider-height) + 4px); 
+            pointer-events: none; /* Ignore clicks on markers */
+            z-index: 5;
+            padding: 0 8px; /* Match the padding of the control group */
+        }
+
+        .slider-points .point {
+            position: absolute;
+            height: 4px; /* Reduced dot size */
+            width: 4px;
+            border-radius: 50%;
+            background-color: #888; /* Dark/dim color for the markers */
+            top: calc(50% - 2px); /* Adjusted top for centering */
+            /* Use CSS custom property to position the point */
+            left: var(--pos); 
+            transform: translateX(-50%);
+        }
+
+        .slider-points .point.active-point {
+            background-color: var(--fill-color); /* Bright blue color for active dots */
+            /* Removed subtle glow, making the dot solid and bright */
+        }
+
+        /* Status Light Glow */
+        #status-light.active {
+            box-shadow: 0 0 5px var(--active-color), 0 0 15px var(--active-color);
+        }
+
+        /* Custom Toggle Switch Styling */
+        .toggle-label input:checked + .slider {
+            background-color: var(--active-color); 
+        }
+
+        .toggle-label input:focus + .slider {
+            box-shadow: 0 0 1px var(--active-color);
+        }
+
+        .toggle-label input:checked + .slider:before {
+            transform: translateX(26px);
+            background-color: #ffffff;
+        }
+
+        .toggle-label .slider {
+            background-color: #ccc;
+            transition: .4s;
+        }
+
+        .toggle-label .slider:before {
+            background-color: white;
+            transition: .4s;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="app" class="w-full max-w-lg bg-[#24243e] p-8 rounded-3xl shadow-2xl border border-indigo-700/50">
+        <!-- Header -->
+        <h1 class="text-3xl font-extrabold text-white text-center mb-2 tracking-wider">
+            FM Signal Processor
+        </h1>
+        <p class="text-sm text-indigo-300 text-center mb-6">
+            Microphone Input with HPF and Gain Control
+        </p>
+
+        <!-- Status and Enable Switch -->
+        <div class="flex items-center justify-between mb-8 p-4 rounded-xl bg-[#1a1a2e] shadow-inner">
+            <div class="flex items-center space-x-3">
+                <div id="status-light" class="w-4 h-4 rounded-full bg-gray-500 shadow-lg transition-all duration-300"></div>
+                <span id="status-text" class="text-sm font-semibold text-gray-300">Mic Disabled</span>
+            </div>
+
+            <!-- Mic Enable Toggle Switch -->
+            <label class="toggle-label relative inline-block w-14 h-8">
+                <input type="checkbox" id="mic-toggle" class="opacity-0 w-0 h-0">
+                <span class="slider absolute cursor-pointer top-0 left-0 right-0 bottom-0 bg-gray-400 rounded-full transition-all duration-400 before:absolute before:content-[''] before:h-6 before:w-6 before:left-1 before:bottom-1 before:bg-white before:rounded-full before:transition-all duration-400"></span>
+            </label>
+        </div>
+
+        <!-- Slider Controls -->
+        <div class="flex flex-col space-y-12">
+
+            <!-- 1. Gain Control Slider -->
+            <div class="flex flex-col items-center">
+                <p class="text-sm font-medium text-indigo-300 mb-3">OUTPUT GAIN</p>
+                <!-- Displayed as Percentage -->
+                <p id="gain-value" class="text-2xl font-bold text-white mb-4">100%</p>
+
+                <div class="slider-control-group w-full">
+                    <input type="range" min="0.0" max="3.0" value="1.0" step="0.01" class="custom-slider" id="gain-range" oninput="updateGain()">
+                    <div class="slider-points" id="gain-points">
+                        <!-- Points will be generated by JS -->
+                    </div>
+                </div>
+                <!-- Labels below the slider for context -->
+                <div class="flex justify-between w-full px-2 text-xs text-gray-500 mt-2">
+                    <span class="text-white">0%</span>
+                    <span>150%</span>
+                    <span class="text-white">300%</span>
+                </div>
+            </div>
+
+            <!-- 2. HPF Cutoff Slider -->
+            <div class="flex flex-col items-center">
+                <p class="text-sm font-medium text-indigo-300 mb-3">HPF CUTOFF (Hz)</p>
+                <p id="hpf-value" class="text-2xl font-bold text-white mb-4">80 Hz</p>
+                
+                <div class="slider-control-group w-full">
+                    <input type="range" min="20" max="400" value="80" step="1" class="custom-slider" id="hpf-range" oninput="updateHPF()">
+                    <div class="slider-points" id="hpf-points">
+                        <!-- Points will be generated by JS -->
+                    </div>
+                </div>
+                <!-- Labels below the slider for context -->
+                <div class="flex justify-between w-full px-2 text-xs text-gray-500 mt-2">
+                    <span class="text-white">20 Hz</span>
+                    <span>210 Hz</span>
+                    <span class="text-white">400 Hz</span>
+                </div>
+            </div>
+
+            <!-- 3. Noise Reduction Threshold (New Control) -->
+            <div class="flex flex-col items-center">
+                <p class="text-sm font-medium text-red-400 mb-3">NOISE REDUCTION THRESHOLD</p>
+                <p id="gate-value" class="text-2xl font-bold text-white mb-4">-40 dB</p>
+                
+                <div class="slider-control-group w-full">
+                    <!-- Note: dB values are negative; min is quietest (-100), max is loudest (0) -->
+                    <input type="range" min="-80" max="-20" value="-40" step="1" class="custom-slider" id="gate-range" oninput="updateGateThreshold()">
+                    <div class="slider-points" id="gate-points">
+                        <!-- Points will be generated by JS -->
+                    </div>
+                </div>
+                <!-- Labels below the slider for context -->
+                <div class="flex justify-between w-full px-2 text-xs text-gray-500 mt-2">
+                    <span class="text-white">-80 dB (Silent)</span>
+                    <span>-50 dB</span>
+                    <span class="text-white">-20 dB (Loud)</span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer / Instructions -->
+        <div class="mt-10 p-4 border-t border-indigo-700/50 text-xs text-gray-400 text-center">
+            <p>Ensure an audio device (like speakers/aux) is connected to hear the processed microphone signal.</p>
+            <p>HPF cuts low-frequency noise (rumble). **Noise Reduction** targets general background hiss/static.</p>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL AUDIO VARIABLES ---
+        let audioContext;
+        let stream; 
+        
+        // Audio Processing Nodes
+        let sourceNode;
+        let hpfNode;
+        let compressorNode; // Used for noise gate effect
+        let gainNode;
+
+        // --- DOM ELEMENTS ---
+        const micToggle = document.getElementById('mic-toggle');
+        const statusLight = document.getElementById('status-light');
+        const statusText = document.getElementById('status-text');
+
+        // Slider elements
+        const gainRange = document.getElementById('gain-range');
+        const gainValueDisplay = document.getElementById('gain-value');
+        const gainPointsContainer = document.getElementById('gain-points');
+
+        const hpfRange = document.getElementById('hpf-range');
+        const hpfValueDisplay = document.getElementById('hpf-value');
+        const hpfPointsContainer = document.getElementById('hpf-points');
+
+        // New Gate elements
+        const gateRange = document.getElementById('gate-range');
+        const gateValueDisplay = document.getElementById('gate-value');
+        const gatePointsContainer = document.getElementById('gate-points');
+        
+
+        /**
+         * Applies a custom gradient fill to the slider track up to the thumb's position.
+         * @param {HTMLInputElement} slider The range input element.
+         */
+        function applySliderFill(slider) {
+            const min = parseFloat(slider.min);
+            const max = parseFloat(slider.max);
+            const value = parseFloat(slider.value);
+            
+            const normalized = ((value - min) / (max - min)) * 100;
+            
+            const fillColor = getComputedStyle(document.documentElement).getPropertyValue('--fill-color');
+            const trackColor = getComputedStyle(document.documentElement).getPropertyValue('--track-color'); 
+            
+            slider.style.background = `linear-gradient(to right, 
+                ${fillColor} 0%, 
+                ${fillColor} ${normalized}%, 
+                ${trackColor} ${normalized}%, 
+                ${trackColor} 100%)`;
+        }
+
+        /**
+         * Generates the marker dots for a slider based on specific values.
+         * @param {HTMLElement} container The DOM element to append markers to.
+         * @param {HTMLInputElement} rangeEl The corresponding range input.
+         * @param {Array<number>} points Array of values where markers should appear.
+         */
+        function generateSliderPoints(container, rangeEl, points) {
+            container.innerHTML = '';
+            const min = parseFloat(rangeEl.min);
+            const max = parseFloat(rangeEl.max);
+
+            points.forEach(pointValue => {
+                const position = ((pointValue - min) / (max - min)) * 100;
+                
+                const point = document.createElement('div');
+                point.className = 'point';
+                point.style.setProperty('--pos', `${position}%`);
+                point.dataset.value = pointValue;
+                container.appendChild(point);
+            });
+        }
+        
+        /**
+         * Checks which marker dots are "active" (passed by the current slider value).
+         * @param {HTMLInputElement} rangeEl The corresponding range input.
+         */
+        function updateActivePoints(rangeEl) {
+            const currentValue = parseFloat(rangeEl.value);
+            const points = rangeEl.nextElementSibling.querySelectorAll('.point');
+
+            points.forEach(point => {
+                const pointValue = parseFloat(point.dataset.value);
+                // For dB sliders (negative range), we activate points if the point value is LESS than the current (negative) value.
+                // For positive ranges (Gain, HPF), we activate if point value is LESS than current value.
+                let shouldActivate = currentValue >= pointValue;
+                
+                if (rangeEl.id === 'gate-range') {
+                    // For dB, the points go from -80 (left) to -20 (right).
+                    // If current is -40, points at -80, -70, -60, -50 should be active.
+                    shouldActivate = pointValue <= currentValue;
+                }
+                
+                if (shouldActivate) {
+                    point.classList.add('active-point');
+                } else {
+                    point.classList.remove('active-point');
+                }
+            });
+        }
+
+
+        /**
+         * Initializes the Web Audio Context and audio graph.
+         * @returns {boolean} True if context started successfully.
+         */
+        async function initializeAudio() {
+            try {
+                if (!audioContext || audioContext.state === 'closed') {
+                    // Use a higher sample rate if available for better quality
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+                } else if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false 
+                    }
+                });
+
+                // 1. Create Nodes
+                sourceNode = audioContext.createMediaStreamSource(stream);
+                hpfNode = audioContext.createBiquadFilter();
+                compressorNode = audioContext.createDynamicsCompressor(); 
+                gainNode = audioContext.createGain();
+
+                // 2. Configure HPF (Improved)
+                hpfNode.type = "highpass";
+                // Set the Q (resonance) to 1.0 for a slightly sharper cutoff than default (0)
+                hpfNode.Q.setValueAtTime(1.0, audioContext.currentTime); 
+                hpfNode.frequency.setValueAtTime(parseFloat(hpfRange.value), audioContext.currentTime);
+
+                // 3. Configure Compressor/Gate (Noise Reduction)
+                // Threshold: Below this level, the signal is aggressively reduced (high ratio).
+                compressorNode.threshold.setValueAtTime(parseFloat(gateRange.value), audioContext.currentTime); 
+                // Ratio: A very high ratio effectively acts as a noise gate.
+                compressorNode.ratio.setValueAtTime(20, audioContext.currentTime);
+                // Attack/Release: Fast attack, medium release for clean operation
+                compressorNode.attack.setValueAtTime(0.003, audioContext.currentTime); // 3ms
+                compressorNode.release.setValueAtTime(0.25, audioContext.currentTime); // 250ms
+
+                // 4. Configure Gain
+                gainNode.gain.setValueAtTime(parseFloat(gainRange.value), audioContext.currentTime);
+
+                // 5. Build the Audio Graph: Source -> HPF -> Noise Gate (Compressor) -> Gain -> Destination
+                sourceNode.connect(hpfNode);
+                hpfNode.connect(compressorNode);
+                compressorNode.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                return true;
+
+            } catch (error) {
+                console.error("Error accessing microphone or initializing audio:", error);
+                statusLight.className = 'w-4 h-4 rounded-full bg-red-500 shadow-lg';
+                statusText.textContent = 'Error: Check mic permissions or device.';
+                micToggle.checked = false; 
+                return false;
+            }
+        }
+
+        /**
+         * Stops the audio stream and closes the context.
+         */
+        function stopAudio() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close().catch(e => console.error("Error closing context:", e));
+                audioContext = null;
+            }
+            // Clear references
+            sourceNode = null;
+            hpfNode = null;
+            compressorNode = null;
+            gainNode = null;
+            
+            statusLight.className = 'w-4 h-4 rounded-full bg-gray-500 shadow-lg transition-all duration-300';
+            statusText.textContent = 'Mic Disabled';
+        }
+
+        // --- UI & AUDIO UPDATE HANDLERS ---
+
+        function updateGain() {
+            const gainValue = parseFloat(gainRange.value);
+
+            // 1. Update Audio Node
+            if (gainNode) {
+                if (audioContext && audioContext.state !== 'closed') {
+                    gainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
+                }
+            }
+
+            // 2. Update UI (Display as Percentage)
+            const gainPercent = Math.round((gainValue / 3.0) * 100);
+            gainValueDisplay.textContent = `${gainPercent}%`;
+
+            // 3. Update Visuals
+            applySliderFill(gainRange);
+            updateActivePoints(gainRange);
+        }
+
+        function updateHPF() {
+            const hpfFreq = parseFloat(hpfRange.value);
+
+            // 1. Update Audio Node
+            if (hpfNode) {
+                if (audioContext && audioContext.state !== 'closed') {
+                    // Use exponential ramp for frequency changes for a more natural sound
+                    hpfNode.frequency.exponentialRampToValueAtTime(hpfFreq, audioContext.currentTime + 0.05);
+                }
+            }
+
+            // 2. Update UI
+            hpfValueDisplay.textContent = `${hpfFreq} Hz`;
+
+            // 3. Update Visuals
+            applySliderFill(hpfRange);
+            updateActivePoints(hpfRange);
+        }
+
+        function updateGateThreshold() {
+            const threshold = parseFloat(gateRange.value);
+            
+            // 1. Update Audio Node
+            if (compressorNode) {
+                if (audioContext && audioContext.state !== 'closed') {
+                    compressorNode.threshold.setValueAtTime(threshold, audioContext.currentTime);
+                }
+            }
+
+            // 2. Update UI
+            gateValueDisplay.textContent = `${threshold} dB`;
+
+            // 3. Update Visuals
+            applySliderFill(gateRange);
+            updateActivePoints(gateRange);
+        }
+
+
+        /**
+         * Main event listener for the mic toggle switch.
+         */
+        micToggle.addEventListener('change', async (event) => {
+            if (event.target.checked) {
+                statusLight.className = 'w-4 h-4 rounded-full bg-yellow-500 shadow-lg active animate-pulse';
+                statusText.textContent = 'Starting Mic...';
+
+                const success = await initializeAudio();
+
+                if (success) {
+                    statusLight.className = 'w-4 h-4 rounded-full bg-green-500 shadow-lg active';
+                    statusText.textContent = 'Mic Active & Processing';
+                    // Initial update of audio and visuals
+                    updateGain();
+                    updateHPF();
+                    updateGateThreshold();
+                } else {
+                    event.target.checked = false;
+                }
+
+            } else {
+                stopAudio();
+            }
+        });
+
+
+        // --- INITIAL SETUP (Run on Load) ---
+        window.onload = () => {
+            // Define marker points for each slider
+            // Gain: 0, 0.5, 1.0 (100%), 1.5, 2.0, 2.5, 3.0 (300%)
+            generateSliderPoints(gainPointsContainer, gainRange, [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]);
+            
+            // HPF: 20, 50, 80, 150, 250, 400 Hz
+            generateSliderPoints(hpfPointsContainer, hpfRange, [20, 50, 80, 150, 250, 400]);
+
+            // Noise Gate: -80, -60, -40, -30, -20 dB
+            generateSliderPoints(gatePointsContainer, gateRange, [-80, -60, -40, -30, -20]);
+
+            // Set initial rotation, lighting, and display values
+            updateGain();
+            updateHPF();
+            updateGateThreshold();
+
+            // Resume audio context on first user interaction for compatibility
+            document.addEventListener('click', () => {
+                if (audioContext && audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+            }, { once: true });
+        };
+
+    </script>
+</body>
+</html>
