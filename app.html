@@ -6,54 +6,74 @@
     <title>Mic Signal Processor (HPF & Gain)</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Load Lucide Icons for a modern touch -->
-    <script type="module" src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <style>
         /* Custom font */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
 
         :root {
             --knob-size: 120px;
+            --neon-color: #a0a0ff; /* Purple Neon */
+            --active-color: #4CAF50;
+            --knob-bg: #1a1a2e; /* Deep purple/dark blue */
+            --knob-face-color: #24243e; /* Slightly lighter face color */
         }
 
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #1a1a2e; /* Deep purple/dark blue background */
+            background-color: var(--knob-bg); 
         }
 
-        /* KNOP STYLING */
+        /* KNOP STYLING: The container is static and holds the fill effect */
         .knob-container {
             position: relative;
             width: var(--knob-size);
             height: var(--knob-size);
+            border-radius: 50%;
+            /* Static background for non-filled area (matches body color) */
+            background-color: var(--knob-bg); 
+            z-index: 1;
         }
 
-        .knob-base {
+        /* New element for the dynamic fill (The rotating neon light) */
+        .knob-fill {
+            position: absolute;
             width: 100%;
             height: 100%;
             border-radius: 50%;
+            z-index: 5;
+            /* Start point for the gradient is offset to MIN_ANGLE (-135deg) */
+            transform: rotate(225deg); 
+            
+            /* --- THINNER RING MASK IMPLEMENTATION --- */
+            /* Creates a thin ring from 83% to 87% of the radius (approx 2.4px thick) */
+            -webkit-mask: radial-gradient(circle at center, transparent 83%, black 83%, black 87%, transparent 87%);
+            mask: radial-gradient(circle at center, transparent 83%, black 83%, black 87%, transparent 87%);
+            
+            /* Add strong neon shadow for the filled part of the thin ring */
+            box-shadow: 0 0 5px var(--neon-color), 0 0 15px var(--neon-color);
+        }
+
+        /* The rotating part (the physical knob face) */
+        .knob-face { 
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: calc(var(--knob-size) - 20px); 
+            height: calc(var(--knob-size) - 20px);
+            /* Reset transform to center it before applying rotation */
+            transform: translate(-50%, -50%); 
+            border-radius: 50%;
             background: linear-gradient(145deg, #2a2a48, #16162a);
+            /* Soft deep shadow for 3D look (no neon glow on the face) */
             box-shadow: 8px 8px 15px #10101d, -8px -8px 15px #20203f;
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: grab;
+            cursor: grab; 
             user-select: none;
             transition: transform 0.1s ease-out;
-            touch-action: none; /* Important for mobile touch handling */
-        }
-
-        .knob-marker {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background-color: #ff5757; /* Accent color */
-            transform-origin: 0 -40px; /* Adjust based on knob size (center to top edge) */
-            transform: translate(-50%, -50%) rotate(0deg) translateY(-40px);
-            transition: background-color 0.2s;
+            touch-action: none; 
+            z-index: 10;
         }
 
         /* Visually hide the input range slider but keep it functional */
@@ -63,7 +83,7 @@
             height: 100%;
             opacity: 0;
             cursor: grab;
-            z-index: 10;
+            z-index: 15; /* Put above knob-face to capture clicks/touches */
         }
 
         /* Marker position on the knob */
@@ -71,19 +91,26 @@
             position: absolute;
             width: 4px;
             height: 20px;
-            background-color: #a0a0ff;
+            background-color: var(--neon-color);
             top: 5px;
             left: calc(50% - 2px);
             border-radius: 2px;
+            /* Neon glow for the indicator line */
+            box-shadow: 0 0 4px var(--neon-color), 0 0 8px var(--neon-color); 
         }
 
-        /* Custom Toggle Switch Styling */
+        /* Status Light Glow */
+        #status-light.active {
+            box-shadow: 0 0 5px var(--active-color), 0 0 15px var(--active-color);
+        }
+
+        /* Custom Toggle Switch Styling (retained from previous version) */
         .toggle-label input:checked + .slider {
-            background-color: #4CAF50; /* Green when checked/on */
+            background-color: var(--active-color); 
         }
 
         .toggle-label input:focus + .slider {
-            box-shadow: 0 0 1px #4CAF50;
+            box-shadow: 0 0 1px var(--active-color);
         }
 
         .toggle-label input:checked + .slider:before {
@@ -133,24 +160,34 @@
             <!-- 1. Gain Control Knob -->
             <div class="flex flex-col items-center">
                 <div class="knob-container">
-                    <div id="gain-knob" class="knob-base shadow-xl">
+                    <!-- Static element for the neon fill effect -->
+                    <div id="gain-fill" class="knob-fill"></div>
+
+                    <!-- The rotating knob face (used to track rotation, previously .knob-base) -->
+                    <div id="gain-knob" class="knob-face shadow-xl">
                         <div class="knob-marker-indicator"></div>
                     </div>
-                    <!-- Hidden input range to handle the value logic -->
-                    <input type="range" min="0.0" max="3.0" value="1.0" step="0.01" class="knob-input" id="gain-range">
+                    <!-- Hidden input range to handle the value logic (with sensitivity data) -->
+                    <!-- This sits on top to easily capture mouse/touch events -->
+                    <input type="range" min="0.0" max="3.0" value="1.0" step="0.01" class="knob-input" id="gain-range" data-sensitivity="0.005">
                 </div>
                 <p class="text-sm font-medium text-indigo-300 mt-3">OUTPUT GAIN</p>
-                <p id="gain-value" class="text-xl font-bold text-white mt-1">1.00x</p>
+                <!-- Displayed as Percentage -->
+                <p id="gain-value" class="text-xl font-bold text-white mt-1">100%</p>
             </div>
 
             <!-- 2. HPF Cutoff Knob -->
             <div class="flex flex-col items-center">
                 <div class="knob-container">
-                    <div id="hpf-knob" class="knob-base shadow-xl">
+                    <!-- Static element for the neon fill effect -->
+                    <div id="hpf-fill" class="knob-fill"></div>
+
+                    <!-- The rotating knob face -->
+                    <div id="hpf-knob" class="knob-face shadow-xl">
                         <div class="knob-marker-indicator"></div>
                     </div>
-                    <!-- Hidden input range to handle the value logic -->
-                    <input type="range" min="20" max="400" value="80" step="1" class="knob-input" id="hpf-range">
+                    <!-- Hidden input range to handle the value logic (with increased sensitivity) -->
+                    <input type="range" min="20" max="400" value="80" step="1" class="knob-input" id="hpf-range" data-sensitivity="0.8">
                 </div>
                 <p class="text-sm font-medium text-indigo-300 mt-3">HPF CUTOFF (Hz)</p>
                 <p id="hpf-value" class="text-xl font-bold text-white mt-1">80 Hz</p>
@@ -165,14 +202,12 @@
     </div>
 
     <script>
-        // Use 'lucide.createIcons()' to render Lucide Icons if used, though I used simple divs here.
-
         // --- GLOBAL AUDIO VARIABLES ---
         let audioContext;
         let sourceNode;
         let gainNode;
         let hpfNode;
-        let stream; // To hold the MediaStream object
+        let stream; 
 
         // --- DOM ELEMENTS ---
         const micToggle = document.getElementById('mic-toggle');
@@ -182,14 +217,17 @@
         // Knob elements
         const gainRange = document.getElementById('gain-range');
         const gainKnob = document.getElementById('gain-knob');
+        const gainFill = document.getElementById('gain-fill');
         const gainValueDisplay = document.getElementById('gain-value');
 
         const hpfRange = document.getElementById('hpf-range');
         const hpfKnob = document.getElementById('hpf-knob');
+        const hpfFill = document.getElementById('hpf-fill');
         const hpfValueDisplay = document.getElementById('hpf-value');
 
         const MIN_ANGLE = -135; // Start rotation angle for knob
         const MAX_ANGLE = 135;  // End rotation angle for knob
+        const TOTAL_SWEEP = MAX_ANGLE - MIN_ANGLE; // 270 degrees
 
         /**
          * Maps a value from one range to a rotation angle.
@@ -200,21 +238,45 @@
          */
         function mapValueToAngle(value, min, max) {
             const normalized = (value - min) / (max - min);
-            return MIN_ANGLE + normalized * (MAX_ANGLE - MIN_ANGLE);
+            // Ensure normalized is clamped between 0 and 1
+            const clampedNormalized = Math.min(1, Math.max(0, normalized));
+            return MIN_ANGLE + clampedNormalized * TOTAL_SWEEP;
         }
 
         /**
-         * Rotates the visual knob element based on its input range value.
-         * @param {HTMLElement} knobEl The visual knob element.
+         * Updates the visual knob rotation and the concentric lighting fill.
+         * @param {HTMLElement} knobFaceEl The rotating knob face element.
          * @param {HTMLInputElement} rangeEl The hidden range input element.
+         * @param {HTMLElement} knobFillEl The static fill element.
          */
-        function updateKnobRotation(knobEl, rangeEl) {
+        function updateKnobVisuals(knobFaceEl, rangeEl, knobFillEl) {
             const value = parseFloat(rangeEl.value);
             const min = parseFloat(rangeEl.min);
             const max = parseFloat(rangeEl.max);
+            
+            // 1. Calculate Rotation Angle
             const angle = mapValueToAngle(value, min, max);
-            knobEl.style.transform = `rotate(${angle}deg)`;
+            // We use translate(-50%, -50%) to center it, then apply the rotation.
+            knobFaceEl.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+
+            // 2. Calculate Fill Percentage (0 to 1)
+            const normalized = (value - min) / (max - min);
+            // Map normalized value (0 to 1) to angle sweep (0deg to 270deg)
+            const fillAngle = normalized * TOTAL_SWEEP;
+
+            // 3. Update the Fill Background (Conic Gradient)
+            const neonColor = getComputedStyle(document.documentElement).getPropertyValue('--neon-color');
+
+            // The conic gradient starts at 0deg on the vertical axis, but the element is rotated 225deg (-135deg)
+            // The fillAngle determines how much of the sweep is visible
+            knobFillEl.style.background = `conic-gradient(
+                ${neonColor} 0deg,
+                ${neonColor} ${fillAngle}deg,
+                transparent ${fillAngle}deg,
+                transparent 360deg
+            )`;
         }
+
 
         /**
          * Initializes the Web Audio Context and audio graph.
@@ -222,30 +284,23 @@
          */
         async function initializeAudio() {
             try {
-                // Check for existing context and resume/create if necessary
                 if (!audioContext || audioContext.state === 'closed') {
-                    // Create new context
                     audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 } else if (audioContext.state === 'suspended') {
-                    // Resume context if suspended (common on mobile browsers)
                     await audioContext.resume();
                 }
 
-                // Get microphone input stream
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-                // Create Audio Nodes
                 sourceNode = audioContext.createMediaStreamSource(stream);
                 hpfNode = audioContext.createBiquadFilter();
                 gainNode = audioContext.createGain();
 
                 // Configure HPF (High-Pass Filter)
                 hpfNode.type = "highpass";
-                // Set initial frequency from the knob
                 hpfNode.frequency.setValueAtTime(parseFloat(hpfRange.value), audioContext.currentTime);
 
                 // Configure Gain
-                // Set initial gain from the knob
                 gainNode.gain.setValueAtTime(parseFloat(gainRange.value), audioContext.currentTime);
 
                 // Build the Audio Graph: Source -> HPF -> Gain -> Destination (Speakers/Aux)
@@ -258,8 +313,8 @@
             } catch (error) {
                 console.error("Error accessing microphone or initializing audio:", error);
                 statusLight.className = 'w-4 h-4 rounded-full bg-red-500 shadow-lg';
-                statusText.textContent = 'Error: ' + (error.name || 'Unknown');
-                micToggle.checked = false; // Turn off toggle if failed
+                statusText.textContent = 'Error: Check mic permissions or device.';
+                micToggle.checked = false; 
                 return false;
             }
         }
@@ -279,8 +334,46 @@
             sourceNode = null;
             hpfNode = null;
             gainNode = null;
-            statusLight.className = 'w-4 h-4 rounded-full bg-gray-500 shadow-lg';
+            statusLight.className = 'w-4 h-4 rounded-full bg-gray-500 shadow-lg transition-all duration-300';
             statusText.textContent = 'Mic Disabled';
+        }
+
+        // --- UI & AUDIO UPDATE HANDLERS ---
+
+        function updateGain() {
+            const gainValue = parseFloat(gainRange.value);
+
+            // 1. Update Audio Node
+            if (gainNode) {
+                if (audioContext && audioContext.state !== 'closed') {
+                    gainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
+                }
+            }
+
+            // 2. Update UI (Display as Percentage)
+            const gainPercent = Math.round((gainValue / 3.0) * 100);
+            gainValueDisplay.textContent = `${gainPercent}%`;
+
+            // 3. Update Visual Knob (Rotation and Lighting)
+            updateKnobVisuals(gainKnob, gainRange, gainFill);
+        }
+
+        function updateHPF() {
+            const hpfFreq = parseFloat(hpfRange.value);
+
+            // 1. Update Audio Node
+            if (hpfNode) {
+                if (audioContext && audioContext.state !== 'closed') {
+                    // Use exponential ramp for frequency changes for a more natural sound
+                    hpfNode.frequency.exponentialRampToValueAtTime(hpfFreq, audioContext.currentTime + 0.05);
+                }
+            }
+
+            // 2. Update UI
+            hpfValueDisplay.textContent = `${hpfFreq} Hz`;
+
+            // 3. Update Visual Knob (Rotation and Lighting)
+            updateKnobVisuals(hpfKnob, hpfRange, hpfFill);
         }
 
         /**
@@ -288,16 +381,17 @@
          */
         micToggle.addEventListener('change', async (event) => {
             if (event.target.checked) {
-                statusLight.className = 'w-4 h-4 rounded-full bg-yellow-500 shadow-lg animate-pulse';
+                statusLight.className = 'w-4 h-4 rounded-full bg-yellow-500 shadow-lg active animate-pulse';
                 statusText.textContent = 'Starting Mic...';
 
                 const success = await initializeAudio();
 
                 if (success) {
-                    statusLight.className = 'w-4 h-4 rounded-full bg-green-500 shadow-lg';
+                    statusLight.className = 'w-4 h-4 rounded-full bg-green-500 shadow-lg active';
                     statusText.textContent = 'Mic Active & Processing';
+                    updateGain();
+                    updateHPF();
                 } else {
-                    // Revert the switch state if initialization failed
                     event.target.checked = false;
                 }
 
@@ -306,53 +400,109 @@
             }
         });
 
-        // --- KNOB HANDLERS ---
+        // --- KNOB INTERACTION (DRAG/TOUCH) LOGIC ---
+        let isDragging = false;
+        let startY = 0;
+        let activeRange = null;
 
         /**
-         * Handles the change event for the Gain range input.
+         * Handles the start of a drag/touch gesture.
          */
-        gainRange.addEventListener('input', () => {
-            const gainValue = parseFloat(gainRange.value);
-
-            // Update Audio Node
-            if (gainNode) {
-                gainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
-            }
-
-            // Update UI
-            gainValueDisplay.textContent = `${gainValue.toFixed(2)}x`;
-            updateKnobRotation(gainKnob, gainRange);
-        });
+        function startDrag(event, rangeEl) {
+            event.preventDefault(); // Prevent text selection/scrolling
+            isDragging = true;
+            activeRange = rangeEl;
+            startY = event.clientY || event.touches[0].clientY;
+            rangeEl.previousElementSibling.style.cursor = 'grabbing';
+        }
 
         /**
-         * Handles the change event for the HPF range input.
+         * Handles the drag/move gesture.
          */
-        hpfRange.addEventListener('input', () => {
-            const hpfFreq = parseFloat(hpfRange.value);
+        function doDrag(event) {
+            if (!isDragging || !activeRange) return;
 
-            // Update Audio Node
-            if (hpfNode) {
-                // Ramp value over a short time to avoid clicks/zipper noise
-                hpfNode.frequency.linearRampToValueAtTime(hpfFreq, audioContext.currentTime + 0.05);
+            const currentY = event.clientY || event.touches[0].clientY;
+            event.preventDefault(); // Prevent accidental mobile scrolling during touch move
+            
+            const deltaY = currentY - startY;
+
+            // Get sensitivity from data attribute (High sensitivity for HPF, low for Gain)
+            const sensitivity = parseFloat(activeRange.dataset.sensitivity || 0.1);
+
+            // Moving UP (Y decreases, deltaY is negative) should increase value.
+            // valueChange = -deltaY * sensitivity
+            let valueChange = -deltaY * sensitivity;
+
+            let currentValue = parseFloat(activeRange.value);
+            const min = parseFloat(activeRange.min);
+            const max = parseFloat(activeRange.max);
+            const step = parseFloat(activeRange.step);
+
+            // Update value
+            let newValue = currentValue + valueChange;
+
+            // Clamp the value to the min/max limits
+            newValue = Math.min(max, Math.max(min, newValue));
+
+            // Snap to step
+            newValue = Math.round(newValue / step) * step;
+
+            // Set the new value and trigger the input event
+            if (newValue !== currentValue) {
+                // Round final value to step's precision
+                const precision = (step.toString().split('.')[1] || []).length;
+                activeRange.value = newValue.toFixed(precision);
+                activeRange.dispatchEvent(new Event('input'));
             }
 
-            // Update UI
-            hpfValueDisplay.textContent = `${hpfFreq} Hz`;
-            updateKnobRotation(hpfKnob, hpfRange);
-        });
+            // Update startY for the next movement calculation
+            startY = currentY;
+        }
+
+        /**
+         * Handles the end of a drag/touch gesture.
+         */
+        function stopDrag() {
+            if (isDragging && activeRange) {
+                isDragging = false;
+                activeRange.previousElementSibling.style.cursor = 'grab';
+                activeRange = null;
+            }
+        }
+
+        /**
+         * Attaches drag, touch, and input handlers to a knob element.
+         */
+        function setupKnobInteraction(knobFaceEl, rangeEl, updateFn) {
+            // 1. Setup Input Event Listener 
+            rangeEl.addEventListener('input', updateFn);
+
+            // 2. Setup Mouse Events for Dragging (attached to the visible knob face)
+            knobFaceEl.addEventListener('mousedown', (e) => startDrag(e, rangeEl));
+            document.addEventListener('mousemove', doDrag);
+            document.addEventListener('mouseup', stopDrag);
+
+            // 3. Setup Touch Events for Mobile Interaction
+            knobFaceEl.addEventListener('touchstart', (e) => {
+                startDrag(e, rangeEl);
+            }, { passive: false }); 
+
+            document.addEventListener('touchmove', doDrag, { passive: false });
+            document.addEventListener('touchend', stopDrag);
+        }
 
         // --- INITIAL SETUP (Run on Load) ---
         window.onload = () => {
-            // Set initial rotation for both knobs based on their default values
-            updateKnobRotation(gainKnob, gainRange);
-            updateKnobRotation(hpfKnob, hpfRange);
+            // Initialize drag and input handlers for both knobs
+            setupKnobInteraction(gainKnob, gainRange, updateGain);
+            setupKnobInteraction(hpfKnob, hpfRange, updateHPF);
 
-            // Initialize display values
-            gainValueDisplay.textContent = `${parseFloat(gainRange.value).toFixed(2)}x`;
-            hpfValueDisplay.textContent = `${parseFloat(hpfRange.value)} Hz`;
+            // Set initial rotation, lighting, and display values
+            updateGain();
+            updateHPF();
 
-            // Optional: Listen for click on the document to resume audio context
-            // Required for some mobile browsers (iOS/Safari) where context starts suspended
+            // Resume audio context on first user interaction for compatibility
             document.addEventListener('click', () => {
                 if (audioContext && audioContext.state === 'suspended') {
                     audioContext.resume();
