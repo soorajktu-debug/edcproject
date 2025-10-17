@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mic Signal Processor (HPF & Gain)</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Lucide Icons for a modern touch -->
+    <script type="module" src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        /* Custom font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+        :root {
+            --knob-size: 120px;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a2e; /* Deep purple/dark blue background */
+        }
+
+        /* KNOP STYLING */
+        .knob-container {
+            position: relative;
+            width: var(--knob-size);
+            height: var(--knob-size);
+        }
+
+        .knob-base {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #2a2a48, #16162a);
+            box-shadow: 8px 8px 15px #10101d, -8px -8px 15px #20203f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            user-select: none;
+            transition: transform 0.1s ease-out;
+            touch-action: none; /* Important for mobile touch handling */
+        }
+
+        .knob-marker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #ff5757; /* Accent color */
+            transform-origin: 0 -40px; /* Adjust based on knob size (center to top edge) */
+            transform: translate(-50%, -50%) rotate(0deg) translateY(-40px);
+            transition: background-color 0.2s;
+        }
+
+        /* Visually hide the input range slider but keep it functional */
+        .knob-input {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: grab;
+            z-index: 10;
+        }
+
+        /* Marker position on the knob */
+        .knob-marker-indicator {
+            position: absolute;
+            width: 4px;
+            height: 20px;
+            background-color: #a0a0ff;
+            top: 5px;
+            left: calc(50% - 2px);
+            border-radius: 2px;
+        }
+
+        /* Custom Toggle Switch Styling */
+        .toggle-label input:checked + .slider {
+            background-color: #4CAF50; /* Green when checked/on */
+        }
+
+        .toggle-label input:focus + .slider {
+            box-shadow: 0 0 1px #4CAF50;
+        }
+
+        .toggle-label input:checked + .slider:before {
+            transform: translateX(26px);
+            background-color: #ffffff;
+        }
+
+        .toggle-label .slider {
+            background-color: #ccc;
+            transition: .4s;
+        }
+
+        .toggle-label .slider:before {
+            background-color: white;
+            transition: .4s;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div id="app" class="w-full max-w-lg bg-[#24243e] p-8 rounded-3xl shadow-2xl border border-indigo-700/50">
+        <!-- Header -->
+        <h1 class="text-3xl font-extrabold text-white text-center mb-2 tracking-wider">
+            FM Signal Processor
+        </h1>
+        <p class="text-sm text-indigo-300 text-center mb-6">
+            Microphone Input with HPF and Gain Control
+        </p>
+
+        <!-- Status and Enable Switch -->
+        <div class="flex items-center justify-between mb-8 p-4 rounded-xl bg-[#1a1a2e] shadow-inner">
+            <div class="flex items-center space-x-3">
+                <div id="status-light" class="w-4 h-4 rounded-full bg-gray-500 shadow-lg transition-all duration-300"></div>
+                <span id="status-text" class="text-sm font-semibold text-gray-300">Mic Disabled</span>
+            </div>
+
+            <!-- Mic Enable Toggle Switch -->
+            <label class="toggle-label relative inline-block w-14 h-8">
+                <input type="checkbox" id="mic-toggle" class="opacity-0 w-0 h-0">
+                <span class="slider absolute cursor-pointer top-0 left-0 right-0 bottom-0 bg-gray-400 rounded-full transition-all duration-400 before:absolute before:content-[''] before:h-6 before:w-6 before:left-1 before:bottom-1 before:bg-white before:rounded-full before:transition-all duration-400"></span>
+            </label>
+        </div>
+
+        <!-- Knob Controls -->
+        <div class="flex flex-col sm:flex-row justify-around items-center space-y-8 sm:space-y-0 sm:space-x-4">
+
+            <!-- 1. Gain Control Knob -->
+            <div class="flex flex-col items-center">
+                <div class="knob-container">
+                    <div id="gain-knob" class="knob-base shadow-xl">
+                        <div class="knob-marker-indicator"></div>
+                    </div>
+                    <!-- Hidden input range to handle the value logic -->
+                    <input type="range" min="0.0" max="3.0" value="1.0" step="0.01" class="knob-input" id="gain-range">
+                </div>
+                <p class="text-sm font-medium text-indigo-300 mt-3">OUTPUT GAIN</p>
+                <p id="gain-value" class="text-xl font-bold text-white mt-1">1.00x</p>
+            </div>
+
+            <!-- 2. HPF Cutoff Knob -->
+            <div class="flex flex-col items-center">
+                <div class="knob-container">
+                    <div id="hpf-knob" class="knob-base shadow-xl">
+                        <div class="knob-marker-indicator"></div>
+                    </div>
+                    <!-- Hidden input range to handle the value logic -->
+                    <input type="range" min="20" max="400" value="80" step="1" class="knob-input" id="hpf-range">
+                </div>
+                <p class="text-sm font-medium text-indigo-300 mt-3">HPF CUTOFF (Hz)</p>
+                <p id="hpf-value" class="text-xl font-bold text-white mt-1">80 Hz</p>
+            </div>
+        </div>
+
+        <!-- Footer / Instructions -->
+        <div class="mt-10 p-4 border-t border-indigo-700/50 text-xs text-gray-400 text-center">
+            <p>Ensure an audio device (like speakers/aux) is connected to hear the processed microphone signal.</p>
+            <p>HPF (High-Pass Filter) cuts low-frequency noise. Start at 80 Hz.</p>
+        </div>
+    </div>
+
+    <script>
+        // Use 'lucide.createIcons()' to render Lucide Icons if used, though I used simple divs here.
+
+        // --- GLOBAL AUDIO VARIABLES ---
+        let audioContext;
+        let sourceNode;
+        let gainNode;
+        let hpfNode;
+        let stream; // To hold the MediaStream object
+
+        // --- DOM ELEMENTS ---
+        const micToggle = document.getElementById('mic-toggle');
+        const statusLight = document.getElementById('status-light');
+        const statusText = document.getElementById('status-text');
+
+        // Knob elements
+        const gainRange = document.getElementById('gain-range');
+        const gainKnob = document.getElementById('gain-knob');
+        const gainValueDisplay = document.getElementById('gain-value');
+
+        const hpfRange = document.getElementById('hpf-range');
+        const hpfKnob = document.getElementById('hpf-knob');
+        const hpfValueDisplay = document.getElementById('hpf-value');
+
+        const MIN_ANGLE = -135; // Start rotation angle for knob
+        const MAX_ANGLE = 135;  // End rotation angle for knob
+
+        /**
+         * Maps a value from one range to a rotation angle.
+         * @param {number} value The current value.
+         * @param {number} min The minimum value of the range.
+         * @param {number} max The maximum value of the range.
+         * @returns {number} The rotation angle in degrees.
+         */
+        function mapValueToAngle(value, min, max) {
+            const normalized = (value - min) / (max - min);
+            return MIN_ANGLE + normalized * (MAX_ANGLE - MIN_ANGLE);
+        }
+
+        /**
+         * Rotates the visual knob element based on its input range value.
+         * @param {HTMLElement} knobEl The visual knob element.
+         * @param {HTMLInputElement} rangeEl The hidden range input element.
+         */
+        function updateKnobRotation(knobEl, rangeEl) {
+            const value = parseFloat(rangeEl.value);
+            const min = parseFloat(rangeEl.min);
+            const max = parseFloat(rangeEl.max);
+            const angle = mapValueToAngle(value, min, max);
+            knobEl.style.transform = `rotate(${angle}deg)`;
+        }
+
+        /**
+         * Initializes the Web Audio Context and audio graph.
+         * @returns {boolean} True if context started successfully.
+         */
+        async function initializeAudio() {
+            try {
+                // Check for existing context and resume/create if necessary
+                if (!audioContext || audioContext.state === 'closed') {
+                    // Create new context
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                } else if (audioContext.state === 'suspended') {
+                    // Resume context if suspended (common on mobile browsers)
+                    await audioContext.resume();
+                }
+
+                // Get microphone input stream
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                // Create Audio Nodes
+                sourceNode = audioContext.createMediaStreamSource(stream);
+                hpfNode = audioContext.createBiquadFilter();
+                gainNode = audioContext.createGain();
+
+                // Configure HPF (High-Pass Filter)
+                hpfNode.type = "highpass";
+                // Set initial frequency from the knob
+                hpfNode.frequency.setValueAtTime(parseFloat(hpfRange.value), audioContext.currentTime);
+
+                // Configure Gain
+                // Set initial gain from the knob
+                gainNode.gain.setValueAtTime(parseFloat(gainRange.value), audioContext.currentTime);
+
+                // Build the Audio Graph: Source -> HPF -> Gain -> Destination (Speakers/Aux)
+                sourceNode.connect(hpfNode);
+                hpfNode.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                return true;
+
+            } catch (error) {
+                console.error("Error accessing microphone or initializing audio:", error);
+                statusLight.className = 'w-4 h-4 rounded-full bg-red-500 shadow-lg';
+                statusText.textContent = 'Error: ' + (error.name || 'Unknown');
+                micToggle.checked = false; // Turn off toggle if failed
+                return false;
+            }
+        }
+
+        /**
+         * Stops the audio stream and closes the context.
+         */
+        function stopAudio() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close().catch(e => console.error("Error closing context:", e));
+                audioContext = null;
+            }
+            sourceNode = null;
+            hpfNode = null;
+            gainNode = null;
+            statusLight.className = 'w-4 h-4 rounded-full bg-gray-500 shadow-lg';
+            statusText.textContent = 'Mic Disabled';
+        }
+
+        /**
+         * Main event listener for the mic toggle switch.
+         */
+        micToggle.addEventListener('change', async (event) => {
+            if (event.target.checked) {
+                statusLight.className = 'w-4 h-4 rounded-full bg-yellow-500 shadow-lg animate-pulse';
+                statusText.textContent = 'Starting Mic...';
+
+                const success = await initializeAudio();
+
+                if (success) {
+                    statusLight.className = 'w-4 h-4 rounded-full bg-green-500 shadow-lg';
+                    statusText.textContent = 'Mic Active & Processing';
+                } else {
+                    // Revert the switch state if initialization failed
+                    event.target.checked = false;
+                }
+
+            } else {
+                stopAudio();
+            }
+        });
+
+        // --- KNOB HANDLERS ---
+
+        /**
+         * Handles the change event for the Gain range input.
+         */
+        gainRange.addEventListener('input', () => {
+            const gainValue = parseFloat(gainRange.value);
+
+            // Update Audio Node
+            if (gainNode) {
+                gainNode.gain.setValueAtTime(gainValue, audioContext.currentTime);
+            }
+
+            // Update UI
+            gainValueDisplay.textContent = `${gainValue.toFixed(2)}x`;
+            updateKnobRotation(gainKnob, gainRange);
+        });
+
+        /**
+         * Handles the change event for the HPF range input.
+         */
+        hpfRange.addEventListener('input', () => {
+            const hpfFreq = parseFloat(hpfRange.value);
+
+            // Update Audio Node
+            if (hpfNode) {
+                // Ramp value over a short time to avoid clicks/zipper noise
+                hpfNode.frequency.linearRampToValueAtTime(hpfFreq, audioContext.currentTime + 0.05);
+            }
+
+            // Update UI
+            hpfValueDisplay.textContent = `${hpfFreq} Hz`;
+            updateKnobRotation(hpfKnob, hpfRange);
+        });
+
+        // --- INITIAL SETUP (Run on Load) ---
+        window.onload = () => {
+            // Set initial rotation for both knobs based on their default values
+            updateKnobRotation(gainKnob, gainRange);
+            updateKnobRotation(hpfKnob, hpfRange);
+
+            // Initialize display values
+            gainValueDisplay.textContent = `${parseFloat(gainRange.value).toFixed(2)}x`;
+            hpfValueDisplay.textContent = `${parseFloat(hpfRange.value)} Hz`;
+
+            // Optional: Listen for click on the document to resume audio context
+            // Required for some mobile browsers (iOS/Safari) where context starts suspended
+            document.addEventListener('click', () => {
+                if (audioContext && audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+            }, { once: true });
+        };
+
+    </script>
+</body>
+</html>
