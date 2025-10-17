@@ -11,11 +11,12 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
 
         :root {
-            --knob-size: 120px;
-            --neon-color: #a0a0ff; /* Purple Neon */
-            --active-color: #4CAF50;
+            --slider-height: 4px; /* Reduced thickness */
+            --thumb-size: 16px;   /* Reduced thumb size */
+            --fill-color: #5d98ff; /* Bright Blue for Active Fill and Thumb */
+            --active-color: #4CAF50; /* Green for Mic Toggle */
             --knob-bg: #1a1a2e; /* Deep purple/dark blue */
-            --knob-face-color: #24243e; /* Slightly lighter face color */
+            --track-color: #3b3b52; /* Darker, visible track */
         }
 
         body {
@@ -23,80 +24,87 @@
             background-color: var(--knob-bg); 
         }
 
-        /* KNOP STYLING: The container is static and holds the fill effect */
-        .knob-container {
+        /* --- SLIDER STYLING --- */
+
+        .slider-control-group {
             position: relative;
-            width: var(--knob-size);
-            height: var(--knob-size);
-            border-radius: 50%;
-            /* Static background for non-filled area (matches body color) */
-            background-color: var(--knob-bg); 
-            z-index: 1;
+            padding: 0 8px; /* Adjusted padding for smaller thumb */
         }
 
-        /* New element for the dynamic fill (The rotating neon light) */
-        .knob-fill {
-            position: absolute;
+        /* Base Range Input Styling */
+        .custom-slider {
+            -webkit-appearance: none;
             width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            z-index: 5;
-            /* Start point for the gradient is offset to MIN_ANGLE (-135deg) */
-            transform: rotate(225deg); 
-            
-            /* --- THINNER RING MASK IMPLEMENTATION --- */
-            /* Creates a thin ring from 83% to 87% of the radius (approx 2.4px thick) */
-            -webkit-mask: radial-gradient(circle at center, transparent 83%, black 83%, black 87%, transparent 87%);
-            mask: radial-gradient(circle at center, transparent 83%, black 83%, black 87%, transparent 87%);
-            
-            /* Add strong neon shadow for the filled part of the thin ring */
-            box-shadow: 0 0 5px var(--neon-color), 0 0 15px var(--neon-color);
+            height: var(--slider-height);
+            background: var(--track-color); 
+            border-radius: 9999px; 
+            cursor: pointer;
+            z-index: 10;
+            position: relative;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+            /* Initial track background fill (updated via JS) - uses bright fill color */
+            background-image: linear-gradient(to right, var(--fill-color) 0%, transparent 0%);
+            background-repeat: no-repeat;
         }
 
-        /* The rotating part (the physical knob face) */
-        .knob-face { 
+        /* --- THUMB STYLING (Webkit - Chrome, Safari) --- */
+        .custom-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: var(--thumb-size);
+            height: var(--thumb-size);
+            /* Set the thumb to the bright fill color */
+            background: var(--fill-color); 
+            border: 2px solid var(--fill-color); /* Bright border color */
+            border-radius: 50%;
+            cursor: grab;
+            margin-top: calc((var(--thumb-size) / 2) - (var(--slider-height) / 2) * -1); /* Center the thumb */
+            transition: all 0.2s ease-out;
+            /* Added subtle white inner glow for definition */
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5), inset 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        /* --- THUMB STYLING (Moz - Firefox) --- */
+        .custom-slider::-moz-range-thumb {
+            width: var(--thumb-size);
+            height: var(--thumb-size);
+            /* Set the thumb to the bright fill color */
+            background: var(--fill-color);
+            border: 2px solid var(--fill-color); /* Bright border color */
+            border-radius: 50%;
+            cursor: grab;
+            transition: all 0.2s ease-out;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5), inset 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        /* --- MARKER DOTS/POINTS --- */
+        .slider-points {
             position: absolute;
             top: 50%;
-            left: 50%;
-            width: calc(var(--knob-size) - 20px); 
-            height: calc(var(--knob-size) - 20px);
-            /* Reset transform to center it before applying rotation */
-            transform: translate(-50%, -50%); 
-            border-radius: 50%;
-            background: linear-gradient(145deg, #2a2a48, #16162a);
-            /* Soft deep shadow for 3D look (no neon glow on the face) */
-            box-shadow: 8px 8px 15px #10101d, -8px -8px 15px #20203f;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: grab; 
-            user-select: none;
-            transition: transform 0.1s ease-out;
-            touch-action: none; 
-            z-index: 10;
+            left: 0;
+            right: 0;
+            transform: translateY(-50%);
+            /* Adjusted height for thinner slider */
+            height: calc(var(--slider-height) + 4px); 
+            pointer-events: none; /* Ignore clicks on markers */
+            z-index: 5;
+            padding: 0 8px; /* Match the padding of the control group */
         }
 
-        /* Visually hide the input range slider but keep it functional */
-        .knob-input {
+        .slider-points .point {
             position: absolute;
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-            cursor: grab;
-            z-index: 15; /* Put above knob-face to capture clicks/touches */
-        }
-
-        /* Marker position on the knob */
-        .knob-marker-indicator {
-            position: absolute;
+            height: 4px; /* Reduced dot size */
             width: 4px;
-            height: 20px;
-            background-color: var(--neon-color);
-            top: 5px;
-            left: calc(50% - 2px);
-            border-radius: 2px;
-            /* Neon glow for the indicator line */
-            box-shadow: 0 0 4px var(--neon-color), 0 0 8px var(--neon-color); 
+            border-radius: 50%;
+            background-color: #888; /* Dark/dim color for the markers */
+            top: calc(50% - 2px); /* Adjusted top for centering */
+            /* Use CSS custom property to position the point */
+            left: var(--pos); 
+            transform: translateX(-50%);
+        }
+
+        .slider-points .point.active-point {
+            background-color: var(--fill-color); /* Bright blue color for active dots */
+            /* Removed subtle glow, making the dot solid and bright */
         }
 
         /* Status Light Glow */
@@ -104,7 +112,7 @@
             box-shadow: 0 0 5px var(--active-color), 0 0 15px var(--active-color);
         }
 
-        /* Custom Toggle Switch Styling (retained from previous version) */
+        /* Custom Toggle Switch Styling */
         .toggle-label input:checked + .slider {
             background-color: var(--active-color); 
         }
@@ -154,50 +162,54 @@
             </label>
         </div>
 
-        <!-- Knob Controls -->
-        <div class="flex flex-col sm:flex-row justify-around items-center space-y-8 sm:space-y-0 sm:space-x-4">
+        <!-- Slider Controls -->
+        <div class="flex flex-col space-y-12">
 
-            <!-- 1. Gain Control Knob -->
+            <!-- 1. Gain Control Slider -->
             <div class="flex flex-col items-center">
-                <div class="knob-container">
-                    <!-- Static element for the neon fill effect -->
-                    <div id="gain-fill" class="knob-fill"></div>
-
-                    <!-- The rotating knob face (used to track rotation, previously .knob-base) -->
-                    <div id="gain-knob" class="knob-face shadow-xl">
-                        <div class="knob-marker-indicator"></div>
-                    </div>
-                    <!-- Hidden input range to handle the value logic (with sensitivity data) -->
-                    <!-- This sits on top to easily capture mouse/touch events -->
-                    <input type="range" min="0.0" max="3.0" value="1.0" step="0.01" class="knob-input" id="gain-range" data-sensitivity="0.005">
-                </div>
-                <p class="text-sm font-medium text-indigo-300 mt-3">OUTPUT GAIN</p>
+                <p class="text-sm font-medium text-indigo-300 mb-3">OUTPUT GAIN</p>
                 <!-- Displayed as Percentage -->
-                <p id="gain-value" class="text-xl font-bold text-white mt-1">100%</p>
-            </div>
+                <p id="gain-value" class="text-2xl font-bold text-white mb-4">100%</p>
 
-            <!-- 2. HPF Cutoff Knob -->
-            <div class="flex flex-col items-center">
-                <div class="knob-container">
-                    <!-- Static element for the neon fill effect -->
-                    <div id="hpf-fill" class="knob-fill"></div>
-
-                    <!-- The rotating knob face -->
-                    <div id="hpf-knob" class="knob-face shadow-xl">
-                        <div class="knob-marker-indicator"></div>
+                <div class="slider-control-group w-full">
+                    <input type="range" min="0.0" max="3.0" value="1.0" step="0.01" class="custom-slider" id="gain-range" oninput="updateGain()">
+                    <div class="slider-points" id="gain-points">
+                        <!-- Points will be generated by JS -->
                     </div>
-                    <!-- Hidden input range to handle the value logic (with increased sensitivity) -->
-                    <input type="range" min="20" max="400" value="80" step="1" class="knob-input" id="hpf-range" data-sensitivity="0.8">
                 </div>
-                <p class="text-sm font-medium text-indigo-300 mt-3">HPF CUTOFF (Hz)</p>
-                <p id="hpf-value" class="text-xl font-bold text-white mt-1">80 Hz</p>
+                <!-- Labels below the slider for context -->
+                <div class="flex justify-between w-full px-2 text-xs text-gray-500 mt-2">
+                    <span class="text-white">0%</span>
+                    <span>150%</span>
+                    <span class="text-white">300%</span>
+                </div>
             </div>
+
+            <!-- 2. HPF Cutoff Slider -->
+            <div class="flex flex-col items-center">
+                <p class="text-sm font-medium text-indigo-300 mb-3">HPF CUTOFF (Hz)</p>
+                <p id="hpf-value" class="text-2xl font-bold text-white mb-4">80 Hz</p>
+                
+                <div class="slider-control-group w-full">
+                    <input type="range" min="20" max="400" value="80" step="1" class="custom-slider" id="hpf-range" oninput="updateHPF()">
+                    <div class="slider-points" id="hpf-points">
+                        <!-- Points will be generated by JS -->
+                    </div>
+                </div>
+                <!-- Labels below the slider for context -->
+                <div class="flex justify-between w-full px-2 text-xs text-gray-500 mt-2">
+                    <span class="text-white">20 Hz</span>
+                    <span>210 Hz</span>
+                    <span class="text-white">400 Hz</span>
+                </div>
+            </div>
+
         </div>
 
         <!-- Footer / Instructions -->
         <div class="mt-10 p-4 border-t border-indigo-700/50 text-xs text-gray-400 text-center">
             <p>Ensure an audio device (like speakers/aux) is connected to hear the processed microphone signal.</p>
-            <p>HPF (High-Pass Filter) cuts low-frequency noise. Start at 80 Hz.</p>
+            <p>HPF (High-Pass Filter) cuts low-frequency noise.</p>
         </div>
     </div>
 
@@ -214,67 +226,78 @@
         const statusLight = document.getElementById('status-light');
         const statusText = document.getElementById('status-text');
 
-        // Knob elements
+        // Slider elements
         const gainRange = document.getElementById('gain-range');
-        const gainKnob = document.getElementById('gain-knob');
-        const gainFill = document.getElementById('gain-fill');
         const gainValueDisplay = document.getElementById('gain-value');
+        const gainPointsContainer = document.getElementById('gain-points');
 
         const hpfRange = document.getElementById('hpf-range');
-        const hpfKnob = document.getElementById('hpf-knob');
-        const hpfFill = document.getElementById('hpf-fill');
         const hpfValueDisplay = document.getElementById('hpf-value');
-
-        const MIN_ANGLE = -135; // Start rotation angle for knob
-        const MAX_ANGLE = 135;  // End rotation angle for knob
-        const TOTAL_SWEEP = MAX_ANGLE - MIN_ANGLE; // 270 degrees
+        const hpfPointsContainer = document.getElementById('hpf-points');
 
         /**
-         * Maps a value from one range to a rotation angle.
-         * @param {number} value The current value.
-         * @param {number} min The minimum value of the range.
-         * @param {number} max The maximum value of the range.
-         * @returns {number} The rotation angle in degrees.
+         * Applies a custom gradient fill to the slider track up to the thumb's position.
+         * The gradient also includes the neon glow effect on the filled portion.
+         * @param {HTMLInputElement} slider The range input element.
          */
-        function mapValueToAngle(value, min, max) {
-            const normalized = (value - min) / (max - min);
-            // Ensure normalized is clamped between 0 and 1
-            const clampedNormalized = Math.min(1, Math.max(0, normalized));
-            return MIN_ANGLE + clampedNormalized * TOTAL_SWEEP;
+        function applySliderFill(slider) {
+            const min = parseFloat(slider.min);
+            const max = parseFloat(slider.max);
+            const value = parseFloat(slider.value);
+            
+            // Calculate normalized value (0 to 100)
+            const normalized = ((value - min) / (max - min)) * 100;
+            
+            const fillColor = getComputedStyle(document.documentElement).getPropertyValue('--fill-color');
+            const trackColor = getComputedStyle(document.documentElement).getPropertyValue('--track-color'); 
+            
+            // Create the gradient for the fill (bright blue) and the remainder (dark track)
+            slider.style.background = `linear-gradient(to right, 
+                ${fillColor} 0%, 
+                ${fillColor} ${normalized}%, 
+                ${trackColor} ${normalized}%, 
+                ${trackColor} 100%)`;
         }
 
         /**
-         * Updates the visual knob rotation and the concentric lighting fill.
-         * @param {HTMLElement} knobFaceEl The rotating knob face element.
-         * @param {HTMLInputElement} rangeEl The hidden range input element.
-         * @param {HTMLElement} knobFillEl The static fill element.
+         * Generates the marker dots for a slider based on specific values.
+         * @param {HTMLElement} container The DOM element to append markers to.
+         * @param {HTMLInputElement} rangeEl The corresponding range input.
+         * @param {Array<number>} points Array of values where markers should appear.
          */
-        function updateKnobVisuals(knobFaceEl, rangeEl, knobFillEl) {
-            const value = parseFloat(rangeEl.value);
+        function generateSliderPoints(container, rangeEl, points) {
+            container.innerHTML = '';
             const min = parseFloat(rangeEl.min);
             const max = parseFloat(rangeEl.max);
-            
-            // 1. Calculate Rotation Angle
-            const angle = mapValueToAngle(value, min, max);
-            // We use translate(-50%, -50%) to center it, then apply the rotation.
-            knobFaceEl.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
 
-            // 2. Calculate Fill Percentage (0 to 1)
-            const normalized = (value - min) / (max - min);
-            // Map normalized value (0 to 1) to angle sweep (0deg to 270deg)
-            const fillAngle = normalized * TOTAL_SWEEP;
+            points.forEach(pointValue => {
+                // Calculate position percentage: (Value - Min) / (Max - Min) * 100
+                const position = ((pointValue - min) / (max - min)) * 100;
+                
+                const point = document.createElement('div');
+                point.className = 'point';
+                point.style.setProperty('--pos', `${position}%`);
+                point.dataset.value = pointValue;
+                container.appendChild(point);
+            });
+        }
+        
+        /**
+         * Checks which marker dots are "active" (passed by the current slider value).
+         * @param {HTMLInputElement} rangeEl The corresponding range input.
+         */
+        function updateActivePoints(rangeEl) {
+            const currentValue = parseFloat(rangeEl.value);
+            const points = rangeEl.nextElementSibling.querySelectorAll('.point');
 
-            // 3. Update the Fill Background (Conic Gradient)
-            const neonColor = getComputedStyle(document.documentElement).getPropertyValue('--neon-color');
-
-            // The conic gradient starts at 0deg on the vertical axis, but the element is rotated 225deg (-135deg)
-            // The fillAngle determines how much of the sweep is visible
-            knobFillEl.style.background = `conic-gradient(
-                ${neonColor} 0deg,
-                ${neonColor} ${fillAngle}deg,
-                transparent ${fillAngle}deg,
-                transparent 360deg
-            )`;
+            points.forEach(point => {
+                const pointValue = parseFloat(point.dataset.value);
+                if (currentValue >= pointValue) {
+                    point.classList.add('active-point');
+                } else {
+                    point.classList.remove('active-point');
+                }
+            });
         }
 
 
@@ -354,8 +377,9 @@
             const gainPercent = Math.round((gainValue / 3.0) * 100);
             gainValueDisplay.textContent = `${gainPercent}%`;
 
-            // 3. Update Visual Knob (Rotation and Lighting)
-            updateKnobVisuals(gainKnob, gainRange, gainFill);
+            // 3. Update Visuals
+            applySliderFill(gainRange);
+            updateActivePoints(gainRange);
         }
 
         function updateHPF() {
@@ -372,8 +396,9 @@
             // 2. Update UI
             hpfValueDisplay.textContent = `${hpfFreq} Hz`;
 
-            // 3. Update Visual Knob (Rotation and Lighting)
-            updateKnobVisuals(hpfKnob, hpfRange, hpfFill);
+            // 3. Update Visuals
+            applySliderFill(hpfRange);
+            updateActivePoints(hpfRange);
         }
 
         /**
@@ -389,6 +414,7 @@
                 if (success) {
                     statusLight.className = 'w-4 h-4 rounded-full bg-green-500 shadow-lg active';
                     statusText.textContent = 'Mic Active & Processing';
+                    // Initial update of audio and visuals
                     updateGain();
                     updateHPF();
                 } else {
@@ -400,103 +426,15 @@
             }
         });
 
-        // --- KNOB INTERACTION (DRAG/TOUCH) LOGIC ---
-        let isDragging = false;
-        let startY = 0;
-        let activeRange = null;
-
-        /**
-         * Handles the start of a drag/touch gesture.
-         */
-        function startDrag(event, rangeEl) {
-            event.preventDefault(); // Prevent text selection/scrolling
-            isDragging = true;
-            activeRange = rangeEl;
-            startY = event.clientY || event.touches[0].clientY;
-            rangeEl.previousElementSibling.style.cursor = 'grabbing';
-        }
-
-        /**
-         * Handles the drag/move gesture.
-         */
-        function doDrag(event) {
-            if (!isDragging || !activeRange) return;
-
-            const currentY = event.clientY || event.touches[0].clientY;
-            event.preventDefault(); // Prevent accidental mobile scrolling during touch move
-            
-            const deltaY = currentY - startY;
-
-            // Get sensitivity from data attribute (High sensitivity for HPF, low for Gain)
-            const sensitivity = parseFloat(activeRange.dataset.sensitivity || 0.1);
-
-            // Moving UP (Y decreases, deltaY is negative) should increase value.
-            // valueChange = -deltaY * sensitivity
-            let valueChange = -deltaY * sensitivity;
-
-            let currentValue = parseFloat(activeRange.value);
-            const min = parseFloat(activeRange.min);
-            const max = parseFloat(activeRange.max);
-            const step = parseFloat(activeRange.step);
-
-            // Update value
-            let newValue = currentValue + valueChange;
-
-            // Clamp the value to the min/max limits
-            newValue = Math.min(max, Math.max(min, newValue));
-
-            // Snap to step
-            newValue = Math.round(newValue / step) * step;
-
-            // Set the new value and trigger the input event
-            if (newValue !== currentValue) {
-                // Round final value to step's precision
-                const precision = (step.toString().split('.')[1] || []).length;
-                activeRange.value = newValue.toFixed(precision);
-                activeRange.dispatchEvent(new Event('input'));
-            }
-
-            // Update startY for the next movement calculation
-            startY = currentY;
-        }
-
-        /**
-         * Handles the end of a drag/touch gesture.
-         */
-        function stopDrag() {
-            if (isDragging && activeRange) {
-                isDragging = false;
-                activeRange.previousElementSibling.style.cursor = 'grab';
-                activeRange = null;
-            }
-        }
-
-        /**
-         * Attaches drag, touch, and input handlers to a knob element.
-         */
-        function setupKnobInteraction(knobFaceEl, rangeEl, updateFn) {
-            // 1. Setup Input Event Listener 
-            rangeEl.addEventListener('input', updateFn);
-
-            // 2. Setup Mouse Events for Dragging (attached to the visible knob face)
-            knobFaceEl.addEventListener('mousedown', (e) => startDrag(e, rangeEl));
-            document.addEventListener('mousemove', doDrag);
-            document.addEventListener('mouseup', stopDrag);
-
-            // 3. Setup Touch Events for Mobile Interaction
-            knobFaceEl.addEventListener('touchstart', (e) => {
-                startDrag(e, rangeEl);
-            }, { passive: false }); 
-
-            document.addEventListener('touchmove', doDrag, { passive: false });
-            document.addEventListener('touchend', stopDrag);
-        }
 
         // --- INITIAL SETUP (Run on Load) ---
         window.onload = () => {
-            // Initialize drag and input handlers for both knobs
-            setupKnobInteraction(gainKnob, gainRange, updateGain);
-            setupKnobInteraction(hpfKnob, hpfRange, updateHPF);
+            // Define marker points for each slider
+            // Gain: 0, 0.5, 1.0 (100%), 1.5, 2.0, 2.5, 3.0 (300%)
+            generateSliderPoints(gainPointsContainer, gainRange, [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]);
+            
+            // HPF: 20, 50, 80, 150, 250, 400 Hz
+            generateSliderPoints(hpfPointsContainer, hpfRange, [20, 50, 80, 150, 250, 400]);
 
             // Set initial rotation, lighting, and display values
             updateGain();
